@@ -34,9 +34,11 @@ function drawField(ctx, worldWidth, worldHeight, leftGoal, rightGoal) {
   ctx.strokeRect(worldWidth - 100, rightGoal.top - 30, 90, (rightGoal.bottom - rightGoal.top) + 60);
 }
 
-function drawScore(blueScore, redScore) {
+function drawScore(blueScore, redScore, half = 1, timeDisplay = '00:00', matchEnded = false) {
   const el = document.getElementById('score');
-  el.textContent = `BLUE ${blueScore} : ${redScore} RED`;
+  const halfText = half === 1 ? '전반' : '후반';
+  const endText = matchEnded ? ' [경기종료]' : '';
+  el.textContent = `BLUE ${blueScore} : ${redScore} RED | ${halfText} ${timeDisplay}${endText}`;
 }
 
 // 화면 우측 상단에 작은 미니맵을 그려 전체 경기장에서 현재 보이는 영역을 표시한다.
