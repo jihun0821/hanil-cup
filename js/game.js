@@ -20,7 +20,8 @@ const PLAYER_CONTROL_RANGE = 32; // 선수 반지름 + 공 반지름 + 여유값
 
 const ball = new Ball(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
 ball.owner = null;
-ball.lastOwner = null; // 직전 소유자 추적: 패스/슛 직후 재획득 방지
+ball.lockedToOwner = null; // 공이 특정 선수에게 잠긴 상태
+ball.lockFrames = 0; // 잠금 지속 프레임 수
 
 const camera = { x: 0, y: 0 };
 
@@ -73,7 +74,8 @@ function showMessage(text) {
 function resetKickoff() {
   ball.reset();
   ball.owner = null;
-  ball.lastOwner = null;
+  ball.lockedToOwner = null;
+  ball.lockFrames = 0;
 
   for (const p of [...blueTeam.fieldPlayers, ...redTeam.fieldPlayers]) {
     p.x = p.homeX;
@@ -98,9 +100,25 @@ function getGameTimeDisplay() {
 }
 
 // 매 프레임 공에서 가장 가까운 선수를 찾아 소유권을 넘긴다. (태클/획득 처리 겸용)
-// 직전 소유자는 일정 시간(몇 프레임) 동안 재획득하지 못하도록 제한한다.
 function updatePossession() {
   const allField = [...blueTeam.fieldPlayers, ...redTeam.fieldPlayers];
+
+  // 공이 특정 선수에게 잠긴 상태라면 잠금을 유지하거나 해제
+  if (ball.lockedToOwner) {
+    ball.lockFrames++;
+    // 10프레임(약 0.17초) 후에 잠금 해제
+    if (ball.lockFrames >= 10) {
+      ball.lockedToOwner = null;
+      ball.lockFrames = 0;
+    } else {
+      // 잠금 유지 중 - 현재 소유자 유지
+      ball.owner = ball.lockedToOwner;
+      for (const p of allField) {
+        p.hasBall = (p === ball.lockedToOwner);
+      }
+      return;
+    }
+  }
 
   let candidate = null;
   let minDist = Infinity;
@@ -108,27 +126,13 @@ function updatePossession() {
   for (const p of allField) {
     const d = dist(p, ball);
     if (d < PLAYER_CONTROL_RANGE && d < minDist) {
-      // 직전 소유자는 처음 6프레임(0.1초) 동안 재획득 불가
-      if (ball.lastOwner === p && (ball.lastOwnerFrames === undefined || ball.lastOwnerFrames < 6)) {
-        continue;
-      }
       minDist = d;
       candidate = p;
     }
     p.hasBall = false;
   }
 
-  // 직전 소유자 타이머 업데이트
-  if (ball.lastOwner && candidate !== ball.lastOwner) {
-    ball.lastOwnerFrames = (ball.lastOwnerFrames || 0) + 1;
-  }
-
   if (candidate) {
-    if (candidate !== ball.owner) {
-      // 새로운 선수가 공을 획득
-      ball.lastOwner = ball.owner; // 이전 소유자 저장
-      ball.lastOwnerFrames = 0;
-    }
     candidate.hasBall = true;
     ball.owner = candidate;
   } else {
@@ -289,10 +293,16 @@ function update() {
       if (p.hasBall) {
         if (consumeShoot()) {
           p.shoot(ball);
+          // 슛 직후 공을 잠금 - 다시 잡지 않도록
+          ball.lockedToOwner = null;
+          ball.lockFrames = 0;
         } else if (consumePass()) {
           const target = bestPassTarget(p, blueTeam.fieldPlayers, redTeam.fieldPlayers);
           if (target) {
             p.passTo(ball, target);
+            // 패스 직후 공을 잠금 - 패스한 선수가 다시 잡지 않도록
+            ball.lockedToOwner = null;
+            ball.lockFrames = 0;
           } else {
             p.dribble(ball);
           }
