@@ -28,12 +28,12 @@ class FieldPlayer {
   // moving: 이번 프레임에 실제로 이동을 시도했는지 여부
   updateStaminaAndSpeed(moving) {
     if (moving) {
-      this.stamina = Math.max(0, this.stamina - 0.08);
+      this.stamina = Math.max(0, this.stamina - 0.03); // 체력 감소 속도 줄임 (0.08 → 0.03)
     } else {
-      this.stamina = Math.min(this.staminaMax, this.stamina + 0.15);
+      this.stamina = Math.min(this.staminaMax, this.stamina + 0.02); // 체력 회복 속도 훨씬 느리게 (0.15 → 0.02)
     }
-    // 체력이 0이어도 최소 60% 속도는 유지 (완전히 멈추면 게임이 안 풀리므로)
-    this.speed = this.baseSpeed * (0.6 + 0.4 * (this.stamina / this.staminaMax));
+    // 체력이 0이어도 최소 40% 속도는 유지 (완전히 멈추면 게임이 안 풀리므로)
+    this.speed = this.baseSpeed * (0.4 + 0.6 * (this.stamina / this.staminaMax));
   }
 
   // 사람 입력에 따라 이동시킨다. (공 소유 여부와 무관하게 항상 입력대로 움직인다)
