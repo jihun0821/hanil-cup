@@ -20,20 +20,9 @@ const PLAYER_CONTROL_RANGE = 32; // 선수 반지름 + 공 반지름 + 여유값
 
 const ball = new Ball(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
 ball.owner = null;
+ball.lastOwner = null; // 직전 소유자 추적: 패스/슛 직후 재획득 방지
 
 const camera = { x: 0, y: 0 };
-
-// ---- 타이머 설정 ----
-// 게임 시간: 90분 = 실제 10분 (600초) = 600프레임 * 60fps = 36000프레임
-// 각 전반/후반 45분 = 실제 5분 = 18000프레임
-const TOTAL_GAME_TIME = 600; // 초 (실제 10분)
-const HALF_TIME = 300; // 초 (실제 5분)
-const FPS = 60;
-const FRAMES_PER_HALF = HALF_TIME * FPS; // 18000프레임
-
-let gameFrameCount = 0;
-let currentHalf = 1; // 1: 전반, 2: 후반
-let matchEnded = false;
 
 // ---- 포메이션 생성 (4-4-2, 10명의 필드 플레이어) ----
 // yFractions: 세로 방향으로 선수를 배치할 위치 비율
@@ -81,18 +70,10 @@ function showMessage(text) {
   messageTimer = setTimeout(() => { messageEl.style.opacity = '0'; }, 2200);
 }
 
-// 게임 시간을 분:초 형식으로 변환
-function getGameTimeDisplay() {
-  const elapsedFrames = gameFrameCount % FRAMES_PER_HALF;
-  const elapsedSeconds = Math.floor(elapsedFrames / FPS);
-  const minutes = Math.floor(elapsedSeconds / 60);
-  const seconds = elapsedSeconds % 60;
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-}
-
 function resetKickoff() {
   ball.reset();
   ball.owner = null;
+  ball.lastOwner = null;
 
   for (const p of [...blueTeam.fieldPlayers, ...redTeam.fieldPlayers]) {
     p.x = p.homeX;
@@ -106,7 +87,18 @@ function resetKickoff() {
   redTeam.goalkeeper.y = (rightGoal.top + rightGoal.bottom) / 2;
 }
 
+// 게임 시간을 분:초 형식으로 변환
+function getGameTimeDisplay() {
+  const FRAMES_PER_HALF = 300 * 60; // 5분 * 60fps
+  const elapsedFrames = gameFrameCount % FRAMES_PER_HALF;
+  const elapsedSeconds = Math.floor(elapsedFrames / 60);
+  const minutes = Math.floor(elapsedSeconds / 60);
+  const seconds = elapsedSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
 // 매 프레임 공에서 가장 가까운 선수를 찾아 소유권을 넘긴다. (태클/획득 처리 겸용)
+// 직전 소유자는 일정 시간(몇 프레임) 동안 재획득하지 못하도록 제한한다.
 function updatePossession() {
   const allField = [...blueTeam.fieldPlayers, ...redTeam.fieldPlayers];
 
@@ -116,13 +108,27 @@ function updatePossession() {
   for (const p of allField) {
     const d = dist(p, ball);
     if (d < PLAYER_CONTROL_RANGE && d < minDist) {
+      // 직전 소유자는 처음 6프레임(0.1초) 동안 재획득 불가
+      if (ball.lastOwner === p && (ball.lastOwnerFrames === undefined || ball.lastOwnerFrames < 6)) {
+        continue;
+      }
       minDist = d;
       candidate = p;
     }
     p.hasBall = false;
   }
 
+  // 직전 소유자 타이머 업데이트
+  if (ball.lastOwner && candidate !== ball.lastOwner) {
+    ball.lastOwnerFrames = (ball.lastOwnerFrames || 0) + 1;
+  }
+
   if (candidate) {
+    if (candidate !== ball.owner) {
+      // 새로운 선수가 공을 획득
+      ball.lastOwner = ball.owner; // 이전 소유자 저장
+      ball.lastOwnerFrames = 0;
+    }
     candidate.hasBall = true;
     ball.owner = candidate;
   } else {
@@ -178,7 +184,7 @@ function trySwitchControl() {
 // R: 블루팀에서 체력이 가장 낮은 선수(사람 제외)를 후보 선수로 교체한다.
 function trySubstitute() {
   if (blueTeam.subsRemaining <= 0) {
-    showMessage('교체 카드를 모두 사용했습니���');
+    showMessage('교체 카드를 모두 사용했습니다');
     return;
   }
   if (blueTeam.bench.length === 0) {
@@ -233,35 +239,43 @@ function updateStaminaUI() {
   fill.style.background = pct < 30 ? '#e53935' : pct < 60 ? '#ffca28' : '#66bb6a';
 }
 
+// 타이머 변수
+const TOTAL_GAME_TIME = 600; // 초 (실제 10분)
+const HALF_TIME = 300; // 초 (실제 5분)
+const FPS = 60;
+const FRAMES_PER_HALF = HALF_TIME * FPS; // 18000프레임
+
+let gameFrameCount = 0;
+let currentHalf = 1; // 1: 전반, 2: 후반
+let matchEnded = false;
+
 function update() {
-  // 게임이 끝났으면 업데이트 안 함
-  if (matchEnded) return;
-
-  // 프레임 카운트 증가
-  gameFrameCount += 1;
-
-  // 전반/후반 체크
-  if (gameFrameCount === FRAMES_PER_HALF) {
-    currentHalf = 2;
-    gameFrameCount = FRAMES_PER_HALF;
-    showMessage('[HALFTIME] 후반전 시작!');
-    resetKickoff();
-    return; // 하프타임에는 플레이 멈춤
-  }
-
-  // 전체 경기 시간 종료 체크
-  if (gameFrameCount >= FRAMES_PER_HALF * 2) {
-    matchEnded = true;
-    showMessage(`[MATCH END] BLUE ${blueTeam.score} : ${redTeam.score} RED`);
-    return;
-  }
-
   if (consumeSwitch()) trySwitchControl();
   if (consumeSubstitute()) trySubstitute();
 
   if (goalFlashTimer > 0) {
     goalFlashTimer -= 1;
     return;
+  }
+
+  // 게임 시간 관리
+  if (!matchEnded) {
+    gameFrameCount += 1;
+
+    // 전반/후반 체크
+    if (gameFrameCount === FRAMES_PER_HALF) {
+      currentHalf = 2;
+      showMessage('[HALFTIME] 후반전 시작!');
+      resetKickoff();
+      return;
+    }
+
+    // 전체 경기 시간 종료 체크
+    if (gameFrameCount >= FRAMES_PER_HALF * 2) {
+      matchEnded = true;
+      showMessage(`[MATCH END] BLUE ${blueTeam.score} : ${redTeam.score} RED`);
+      return;
+    }
   }
 
   updatePossession();
