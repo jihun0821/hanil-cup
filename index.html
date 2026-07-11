@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>테크노 월드컵 - 4단계 프로토타입 (11대11)</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="wrap">
+    <div id="topbar">
+      <span id="score">BLUE 0 : 0 RED</span>
+      <div id="staminaWrap">
+        <span id="staminaLabel">체력</span>
+        <div id="staminaBar"><div id="staminaFill"></div></div>
+      </div>
+      <span id="subsInfo">교체 3회 남음</span>
+    </div>
+    <div id="canvasWrap">
+      <canvas id="game" width="960" height="540"></canvas>
+      <div id="message"></div>
+    </div>
+    <div id="help">← ↑ ↓ → 이동 &nbsp;|&nbsp; Z 패스 &nbsp;|&nbsp; X 슛 &nbsp;|&nbsp; C 선수 전환 &nbsp;|&nbsp; R 교체</div>
+  </div>
+
+  <script src="js/input.js"></script>
+  <script src="js/ball.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/goalkeeper.js"></script>
+  <script src="js/team.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/collision.js"></script>
+  <script src="js/renderer.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
