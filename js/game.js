@@ -23,6 +23,18 @@ ball.owner = null;
 
 const camera = { x: 0, y: 0 };
 
+// ---- 타이머 설정 ----
+// 게임 시간: 90분 = 실제 10분 (600초) = 600프레임 * 60fps = 36000프레임
+// 각 전반/후반 45분 = 실제 5분 = 18000프레임
+const TOTAL_GAME_TIME = 600; // 초 (실제 10분)
+const HALF_TIME = 300; // 초 (실제 5분)
+const FPS = 60;
+const FRAMES_PER_HALF = HALF_TIME * FPS; // 18000프레임
+
+let gameFrameCount = 0;
+let currentHalf = 1; // 1: 전반, 2: 후반
+let matchEnded = false;
+
 // ---- 포메이션 생성 (4-4-2, 10명의 필드 플레이어) ----
 // yFractions: 세로 방향으로 선수를 배치할 위치 비율
 const Y_FRACTIONS = [0.15, 0.38, 0.62, 0.85];
@@ -67,6 +79,15 @@ function showMessage(text) {
   messageEl.style.opacity = '1';
   if (messageTimer) clearTimeout(messageTimer);
   messageTimer = setTimeout(() => { messageEl.style.opacity = '0'; }, 2200);
+}
+
+// 게임 시간을 분:초 형식으로 변환
+function getGameTimeDisplay() {
+  const elapsedFrames = gameFrameCount % FRAMES_PER_HALF;
+  const elapsedSeconds = Math.floor(elapsedFrames / FPS);
+  const minutes = Math.floor(elapsedSeconds / 60);
+  const seconds = elapsedSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
 function resetKickoff() {
@@ -157,7 +178,7 @@ function trySwitchControl() {
 // R: 블루팀에서 체력이 가장 낮은 선수(사람 제외)를 후보 선수로 교체한다.
 function trySubstitute() {
   if (blueTeam.subsRemaining <= 0) {
-    showMessage('교체 카드를 모두 사용했습니다');
+    showMessage('교체 카드를 모두 사용했습니���');
     return;
   }
   if (blueTeam.bench.length === 0) {
@@ -213,6 +234,28 @@ function updateStaminaUI() {
 }
 
 function update() {
+  // 게임이 끝났으면 업데이트 안 함
+  if (matchEnded) return;
+
+  // 프레임 카운트 증가
+  gameFrameCount += 1;
+
+  // 전반/후반 체크
+  if (gameFrameCount === FRAMES_PER_HALF) {
+    currentHalf = 2;
+    gameFrameCount = FRAMES_PER_HALF;
+    showMessage('[HALFTIME] 후반전 시작!');
+    resetKickoff();
+    return; // 하프타임에는 플레이 멈춤
+  }
+
+  // 전체 경기 시간 종료 체크
+  if (gameFrameCount >= FRAMES_PER_HALF * 2) {
+    matchEnded = true;
+    showMessage(`[MATCH END] BLUE ${blueTeam.score} : ${redTeam.score} RED`);
+    return;
+  }
+
   if (consumeSwitch()) trySwitchControl();
   if (consumeSubstitute()) trySubstitute();
 
@@ -311,7 +354,7 @@ function draw() {
   }
 
   drawMinimap(ctx, blueTeam, redTeam, ball, camera, WORLD_WIDTH, WORLD_HEIGHT, VIEW_WIDTH, VIEW_HEIGHT);
-  drawScore(blueTeam.score, redTeam.score);
+  drawScore(blueTeam.score, redTeam.score, currentHalf, getGameTimeDisplay(), matchEnded);
 }
 
 function gameLoop() {
